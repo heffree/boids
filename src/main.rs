@@ -88,6 +88,11 @@ fn cohesion_rule(boids: &mut Vec<Boid>) -> () {
     }
 }
 
+/// aligns the boids velocity with the boids around it
+///
+/// 1. Find the average velocity
+/// 2. Determine velocity of others
+/// 3. Align our boid a percentage of the way
 fn alignment_rule(boids: &mut Vec<Boid>) -> () {
     let average_velocity = boids
         .iter()
@@ -99,6 +104,9 @@ fn alignment_rule(boids: &mut Vec<Boid>) -> () {
     }
 }
 
+/// keep our boid away from other boids
+///
+/// TODO fill this out
 fn separation_rule(boids: &mut Vec<Boid>) {
     let count = boids.len();
     // Temporary vector to store each boid's separation adjustment.
