@@ -5,7 +5,7 @@ const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
 const BOID_COUNT: u32 = 1000;
 const MAX_SPEED: f32 = 1.;
-const DISTANCE: f32 = 2000.;
+const DISTANCE: f32 = 500.;
 
 #[derive(Clone)]
 struct Boid {
@@ -21,8 +21,8 @@ async fn main() {
     let mut boids: Vec<Boid> = (0..BOID_COUNT)
         .map(|_| Boid {
             pos: Vec2::new(
-                rand::gen_range(-DISTANCE, DISTANCE),
-                rand::gen_range(-DISTANCE, DISTANCE),
+                rand::gen_range(-DISTANCE, DISTANCE * 4.),
+                rand::gen_range(-DISTANCE, DISTANCE * 4.),
             ),
             rot: 0.,
             vel: Vec2::new(
@@ -64,9 +64,9 @@ fn move_boids(boids: &mut Vec<Boid>) {
     for boid in boids.iter_mut() {
         boid.pos += boid.vel.clamp(
             Vec2::new(-MAX_SPEED, -MAX_SPEED),
-            Vec2::new(-MAX_SPEED, MAX_SPEED),
+            Vec2::new(MAX_SPEED, MAX_SPEED),
         );
-        boid.pos = wrap_around(&boid.pos);
+        //boid.pos = wrap_around(&boid.pos);
         boid.rot = boid.vel.x.atan2(-boid.vel.y);
     }
 }
@@ -106,7 +106,9 @@ fn alignment_rule(boids: &mut Vec<Boid>) -> () {
 
 /// keep our boid away from other boids
 ///
-/// TODO fill this out
+/// 1. create adjustments vec2 for each boid
+/// 2. get the diff in distance for boids many to many
+/// 3. if diff is less than constant, adjust boid directly away?
 fn separation_rule(boids: &mut Vec<Boid>) {
     let count = boids.len();
     // Temporary vector to store each boid's separation adjustment.
@@ -116,7 +118,7 @@ fn separation_rule(boids: &mut Vec<Boid>) {
         for j in 0..count {
             if i != j {
                 let diff = boids[j].pos - boids[i].pos;
-                if diff.length() < 20.0 {
+                if diff.abs().length() < 20.0 {
                     adjustments[i] -= diff;
                 }
             }
