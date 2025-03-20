@@ -243,7 +243,7 @@ fn separation_rule(boids: &mut Vec<Boid>) {
 fn calc_color(boid: &Boid) -> Color {
     // https://gist.github.com/popcorn245/30afa0f98eea1c2fd34d
     // https://babelcolor.com/index_htm_files/A%20review%20of%20RGB%20color%20spaces.pdf
-    let big_y = 0.7;
+    let big_y = 1.0;
     let x = (boid.vel.normalize().x + 1.) / 2.;
     let y = (boid.vel.normalize().y + 1.) / 2.;
     let big_x = x * (big_y / y);
