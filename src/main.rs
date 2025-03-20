@@ -251,8 +251,8 @@ fn calc_color(boid: &Boid) -> Color {
     //let red_value = 2.3707 * big_x - 0.9001 * big_y - 0.4706 * big_z;
     //let green_value = -0.5139 * big_x + 1.4253 * big_y + 0.0806 * big_z;
     //let blue_value = 0.0053 * big_x - 2.807 * big_y + 1.0094 * big_z;
-    let red_value = 1.3707 * big_x - 0.9001 * big_y - 0.4706 * big_z;
-    let green_value = -0.5139 * big_x + 1.4253 * big_y + 0.0806 * big_z;
+    let red_value = (1.3707 * big_x - 0.9001 * big_y - 0.4706 * big_z).clamp(0.2, 0.6);
+    let green_value = (-0.5139 * big_x + 1.4253 * big_y + 0.0806 * big_z).clamp(0.2, 0.6);
     let blue_value = (1.0053 * big_x - 1.807 * big_y + 2.0094 * big_z).clamp(0.6, 1.0);
     Color::new(red_value, green_value, blue_value, 1.0)
 }
