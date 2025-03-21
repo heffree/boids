@@ -1,20 +1,22 @@
-use macroquad::prelude::*;
+use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
 const BOID_COUNT: u32 = 700;
-const MAX_SPEED: f32 = 6.;
+const MAX_SPEED: f32 = 2.;
 
-const SEPARATION_FACTOR: f32 = 20.;
+const SEPARATION_FACTOR: f32 = 30.;
 const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
 
-const COHESION_FACTOR: f32 = 600.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 150.;
+const COHESION_FACTOR: f32 = 800.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 100.;
 
-const ALIGNMENT_FACTOR: f32 = 75.;
-const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 100.;
+const ALIGNMENT_FACTOR: f32 = 110.0;
+const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 200.;
 
-const DEBUG_ENABLED: bool = false;
+const DRIVE_FACTOR: f32 = 0.7;
+
+const DEBUG_ENABLED: bool = true;
 
 #[derive(Clone, Debug)]
 struct Boid {
@@ -43,7 +45,7 @@ fn toroidal_diff(a: Vec2, b: Vec2) -> Vec2 {
 
 #[macroquad::main("Boids")]
 async fn main() {
-    //window::set_fullscreen(true);
+    window::set_fullscreen(true);
 
     // Wait until the window is fullscreen.
     //while macroquad::window::screen_height() < 700. {
@@ -116,6 +118,8 @@ fn move_boids(boids: &mut Vec<Boid>) {
         let target_rotation = boid.vel.x.atan2(-boid.vel.y);
         boid.rot = target_rotation;
 
+        boid.vel += boid.vel.normalize() * DRIVE_FACTOR;
+
         if boid.vel.length() > MAX_SPEED {
             boid.vel = boid.vel.normalize() * MAX_SPEED
         }
@@ -142,7 +146,7 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
         let mut count = 0;
         for j in 0..num_boids {
             if i != j {
-                let diff = toroidal_diff(boids[i].pos, boids[j].pos);
+                let diff = toroidal_diff(boids[j].pos, boids[i].pos);
                 if diff.length() < COHESION_DISTANCE_THRESHOLD {
                     center += diff + boids[i].pos;
                     count += 1;
@@ -186,7 +190,7 @@ fn alignment_rule(boids: &mut Vec<Boid>) {
             }
         }
         if count > 0 {
-            let perceived_velocity = avg_velocity / count as f32 - boids[i].vel / count as f32;
+            let perceived_velocity = avg_velocity / count as f32 - boids[i].vel;
             adjustments[i] += perceived_velocity;
 
             if i == 0 {
