@@ -3,16 +3,17 @@ use macroquad::{prelude::*, window};
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
 const BOID_COUNT: u32 = 700;
-const MAX_SPEED: f32 = 2.;
+const MAX_SPEED: f32 = 6.;
 
-const SEPARATION_FACTOR: f32 = 30.;
-const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
+const SEPARATION_FACTOR: f32 = 100.;
+const SEPARATION_DISTANCE_THRESHOLD: f32 = 20.;
 
-const COHESION_FACTOR: f32 = 800.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 100.;
+const COHESION_FACTOR: f32 = 700.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 300.;
+const SWIRL_FACTOR: f32 = 100.;
 
-const ALIGNMENT_FACTOR: f32 = 110.0;
-const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 200.;
+const ALIGNMENT_FACTOR: f32 = 3.0;
+const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 25.;
 
 const DRIVE_FACTOR: f32 = 0.7;
 
@@ -155,7 +156,15 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
         }
         if count > 0 {
             let perceived_center = center / count as f32;
-            adjustments[i] += perceived_center - boids[i].pos;
+            let cohesion_adjustment = perceived_center - boids[i].pos;
+            // Compute perpendicular (vortex) vector
+            let perpendicular = if cohesion_adjustment.length() != 0.0 {
+                vec2(-cohesion_adjustment.y, cohesion_adjustment.x).normalize()
+            } else {
+                vec2(0.0, 0.0)
+            };
+            // Combine the direct pull with a small swirl component
+            adjustments[i] += cohesion_adjustment + perpendicular * SWIRL_FACTOR;
             if i == 0 {
                 println!("cohesion adjustment {:?}", adjustments[i]);
             }
