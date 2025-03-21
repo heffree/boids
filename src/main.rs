@@ -14,6 +14,8 @@ const COHESION_DISTANCE_THRESHOLD: f32 = 150.;
 const ALIGNMENT_FACTOR: f32 = 75.;
 const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 100.;
 
+const DEBUG_ENABLED: bool = false;
+
 #[derive(Clone, Debug)]
 struct Boid {
     pos: Vec2,
@@ -94,7 +96,11 @@ async fn main() {
                 boid.pos.x + boid.rot.cos() * BOID_BASE / 2. - boid.rot.sin() * BOID_HEIGHT / 2.,
                 boid.pos.y + boid.rot.sin() * BOID_BASE / 2. + boid.rot.cos() * BOID_HEIGHT / 2.,
             );
-            let color = calc_color(&boid); // if i == 0 { RED } else { calc_color(&boid) };
+            let color = if i == 0 && DEBUG_ENABLED {
+                RED
+            } else {
+                calc_color(&boid)
+            };
             draw_triangle(v1, v2, v3, color);
         }
 
@@ -138,7 +144,7 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
             if i != j {
                 let diff = toroidal_diff(boids[i].pos, boids[j].pos);
                 if diff.length() < COHESION_DISTANCE_THRESHOLD {
-                    center += boids[j].pos;
+                    center += diff + boids[i].pos;
                     count += 1;
                 }
             }
@@ -146,9 +152,9 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
         if count > 0 {
             let perceived_center = center / count as f32;
             adjustments[i] += perceived_center - boids[i].pos;
-            //if i == 0 {
-            //    //println!("cohesion adjustment {:?}", adjustments[i]);
-            //}
+            if i == 0 {
+                println!("cohesion adjustment {:?}", adjustments[i]);
+            }
         }
     }
     // Update each boid's velocity with its computed cohesion force.
@@ -183,9 +189,9 @@ fn alignment_rule(boids: &mut Vec<Boid>) {
             let perceived_velocity = avg_velocity / count as f32 - boids[i].vel / count as f32;
             adjustments[i] += perceived_velocity;
 
-            //if i == 0 {
-            //    println!("alignment adjustment {:?}", adjustments[i]);
-            //}
+            if i == 0 {
+                println!("alignment adjustment {:?}", adjustments[i]);
+            }
         }
     }
     for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
@@ -218,9 +224,9 @@ fn separation_rule(boids: &mut Vec<Boid>) {
                 }
             }
         }
-        //if i == 0 {
-        //    println!("separation adjustment {:?}", adjustments[i]);
-        //}
+        if i == 0 {
+            println!("separation adjustment {:?}", adjustments[i]);
+        }
     }
 
     // Update each boid's velocity with its computed separation force.
