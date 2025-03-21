@@ -1,16 +1,18 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
 const BOID_COUNT: u32 = 700;
-const MAX_SPEED: f32 = 6.;
+const MAX_SPEED: f32 = 9.;
 
 const SEPARATION_FACTOR: f32 = 100.;
 const SEPARATION_DISTANCE_THRESHOLD: f32 = 20.;
 
 const COHESION_FACTOR: f32 = 700.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 300.;
-const SWIRL_FACTOR: f32 = 100.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 500.;
+const SWIRL_FACTOR: f32 = 400.;
 
 const ALIGNMENT_FACTOR: f32 = 3.0;
 const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 25.;
@@ -164,10 +166,10 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
                 vec2(0.0, 0.0)
             };
             // Combine the direct pull with a small swirl component
-            adjustments[i] += cohesion_adjustment + perpendicular * SWIRL_FACTOR;
-            if i == 0 {
-                println!("cohesion adjustment {:?}", adjustments[i]);
-            }
+            adjustments[i] += cohesion_adjustment + perpendicular * SWIRL_FACTOR as f32;
+            //if i == 0 {
+            //    println!("cohesion adjustment {:?}", adjustments[i]);
+            //}
         }
     }
     // Update each boid's velocity with its computed cohesion force.
@@ -202,9 +204,9 @@ fn alignment_rule(boids: &mut Vec<Boid>) {
             let perceived_velocity = avg_velocity / count as f32 - boids[i].vel;
             adjustments[i] += perceived_velocity;
 
-            if i == 0 {
-                println!("alignment adjustment {:?}", adjustments[i]);
-            }
+            //if i == 0 {
+            //    println!("alignment adjustment {:?}", adjustments[i]);
+            //}
         }
     }
     for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
@@ -237,9 +239,9 @@ fn separation_rule(boids: &mut Vec<Boid>) {
                 }
             }
         }
-        if i == 0 {
-            println!("separation adjustment {:?}", adjustments[i]);
-        }
+        //if i == 0 {
+        //    println!("separation adjustment {:?}", adjustments[i]);
+        //}
     }
 
     // Update each boid's velocity with its computed separation force.
