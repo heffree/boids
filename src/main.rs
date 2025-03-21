@@ -1,4 +1,4 @@
-use macroquad::{prelude::*, window};
+use macroquad::prelude::*;
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
@@ -19,7 +19,6 @@ struct Boid {
     pos: Vec2,
     rot: f32,
     vel: Vec2,
-    color: Color,
 }
 
 fn toroidal_diff(a: Vec2, b: Vec2) -> Vec2 {
@@ -50,8 +49,7 @@ async fn main() {
     //    draw_text("Waiting for fullscreen...", 20.0, 20.0, 30.0, WHITE);
     //    next_frame().await;
     //}
-    println!("{:?}", screen_height());
-    println!("{:?}", screen_width());
+
     let width = screen_width();
     let height = screen_height();
 
@@ -73,7 +71,6 @@ async fn main() {
                 rand::gen_range(-MAX_SPEED, MAX_SPEED),
                 rand::gen_range(-MAX_SPEED, MAX_SPEED),
             ),
-            color: if index == 0 { RED } else { WHITE },
         })
         .collect();
 
@@ -97,7 +94,7 @@ async fn main() {
                 boid.pos.x + boid.rot.cos() * BOID_BASE / 2. - boid.rot.sin() * BOID_HEIGHT / 2.,
                 boid.pos.y + boid.rot.sin() * BOID_BASE / 2. + boid.rot.cos() * BOID_HEIGHT / 2.,
             );
-            let color = if i == 0 { RED } else { calc_color(&boid) };
+            let color = calc_color(&boid); // if i == 0 { RED } else { calc_color(&boid) };
             draw_triangle(v1, v2, v3, color);
         }
 
@@ -149,9 +146,9 @@ fn cohesion_rule(boids: &mut Vec<Boid>) {
         if count > 0 {
             let perceived_center = center / count as f32;
             adjustments[i] += perceived_center - boids[i].pos;
-            if i == 0 {
-                println!("cohesion adjustment {:?}", adjustments[i]);
-            }
+            //if i == 0 {
+            //    //println!("cohesion adjustment {:?}", adjustments[i]);
+            //}
         }
     }
     // Update each boid's velocity with its computed cohesion force.
@@ -183,12 +180,12 @@ fn alignment_rule(boids: &mut Vec<Boid>) {
             }
         }
         if count > 0 {
-            let perceived_velocity = (avg_velocity - boids[i].vel) / (count - 1) as f32;
-            adjustments[i] += perceived_velocity; // normaloze and multiply by factor, do
-                                                  // everywhere
-            if i == 0 {
-                println!("alignment adjustment {:?}", adjustments[i]);
-            }
+            let perceived_velocity = avg_velocity / count as f32 - boids[i].vel / count as f32;
+            adjustments[i] += perceived_velocity;
+
+            //if i == 0 {
+            //    println!("alignment adjustment {:?}", adjustments[i]);
+            //}
         }
     }
     for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
@@ -221,9 +218,9 @@ fn separation_rule(boids: &mut Vec<Boid>) {
                 }
             }
         }
-        if i == 0 {
-            //println!("separation adjustment {:?}", adjustments[i]);
-        }
+        //if i == 0 {
+        //    println!("separation adjustment {:?}", adjustments[i]);
+        //}
     }
 
     // Update each boid's velocity with its computed separation force.
