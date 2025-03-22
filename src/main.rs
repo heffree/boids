@@ -5,16 +5,16 @@ use macroquad::{prelude::*, window};
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
 const BOID_COUNT: u32 = 10000;
-const MAX_SPEED: f32 = 3.;
+const MAX_SPEED: f32 = 1.;
 
-const SEPARATION_FACTOR: f32 = 100.;
-const SEPARATION_DISTANCE_THRESHOLD: f32 = 5.;
+const SEPARATION_FACTOR: f32 = 20.;
+const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
 
-const COHESION_FACTOR: f32 = 700.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 50.; // was 500
-const SWIRL_FACTOR: f32 = 100.;
+const COHESION_FACTOR: f32 = 100.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 50.;
+const SWIRL_FACTOR: f32 = 0.;
 
-const ALIGNMENT_FACTOR: f32 = 10.0;
+const ALIGNMENT_FACTOR: f32 = 5.;
 const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 50.;
 
 const MAXIMUM_DISTANCE: f32 = 50.;
@@ -25,6 +25,8 @@ const CELL_SIZE: f32 = 50.;
 
 const DEBUG_ENABLED: bool = true;
 
+// Hard coded because Lazy static kills performance
+// Move simulation to a struct and make these properties for dynamism
 const SCREEN_HEIGHT: f32 = 1280.;
 const SCREEN_WIDTH: f32 = 1920.;
 
