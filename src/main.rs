@@ -4,8 +4,8 @@ use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
-const BOID_COUNT: u32 = 10000;
-const MAX_SPEED: f32 = 1.;
+const BOID_COUNT: u32 = 5000;
+const MAX_SPEED: f32 = 2.;
 
 const SEPARATION_FACTOR: f32 = 20.;
 const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
@@ -14,7 +14,7 @@ const COHESION_FACTOR: f32 = 100.;
 const COHESION_DISTANCE_THRESHOLD: f32 = 50.;
 const SWIRL_FACTOR: f32 = 0.;
 
-const ALIGNMENT_FACTOR: f32 = 5.;
+const ALIGNMENT_FACTOR: f32 = 15.;
 const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 50.;
 
 const MAXIMUM_DISTANCE: f32 = 50.;
