@@ -1,61 +1,176 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::process;
 
 use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
-const BOID_COUNT: u32 = 700;
-const MAX_SPEED: f32 = 9.;
+const BOID_COUNT: u32 = 10000;
+const MAX_SPEED: f32 = 3.;
 
 const SEPARATION_FACTOR: f32 = 100.;
-const SEPARATION_DISTANCE_THRESHOLD: f32 = 20.;
+const SEPARATION_DISTANCE_THRESHOLD: f32 = 5.;
 
 const COHESION_FACTOR: f32 = 700.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 500.;
-const SWIRL_FACTOR: f32 = 400.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 50.; // was 500
+const SWIRL_FACTOR: f32 = 100.;
 
-const ALIGNMENT_FACTOR: f32 = 3.0;
-const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 25.;
+const ALIGNMENT_FACTOR: f32 = 10.0;
+const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 50.;
+
+const MAXIMUM_DISTANCE: f32 = 50.;
 
 const DRIVE_FACTOR: f32 = 0.7;
 
+const CELL_SIZE: f32 = 50.;
+
 const DEBUG_ENABLED: bool = true;
 
+const SCREEN_HEIGHT: f32 = 1280.;
+const SCREEN_WIDTH: f32 = 1920.;
+
+const HALF_SCREEN_HEIGHT: f32 = 1280. / 2.0;
+const HALF_SCREEN_WIDTH: f32 = 1920. / 2.0;
+
 #[derive(Clone, Debug)]
-struct Boid {
+pub struct Boid {
     pos: Vec2,
     rot: f32,
     vel: Vec2,
 }
 
+/// This runs better than non-branching check?
+/// Maybe I'm doing it wrong?
+///
+/// # Non-Branching
+/// ```
+/// fn toroidal_diff(a: Vec2, b: Vec2) -> Vec2 {
+///    let w = SCREEN_WIDTH;
+///    let h = SCREEN_HEIGHT;
+///    let half_w = w * 0.5;
+///    let half_h = h * 0.5;
+///    let dx = (a.x - b.x + half_w).rem_euclid(w) - half_w;
+///    let dy = (a.y - b.y + half_h).rem_euclid(h) - half_h;
+///    vec2(dx, dy)
+/// }
+/// ```
+#[inline(always)]
 fn toroidal_diff(a: Vec2, b: Vec2) -> Vec2 {
-    let w = screen_width();
-    let h = screen_height();
+    let w = SCREEN_WIDTH;
+    let h = SCREEN_HEIGHT;
     let mut dx = a.x - b.x;
     let mut dy = a.y - b.y;
-    if dx > w / 2.0 {
+    if dx > HALF_SCREEN_WIDTH {
         dx -= w;
-    } else if dx < -w / 2.0 {
+    } else if dx < -HALF_SCREEN_WIDTH {
         dx += w;
     }
-    if dy > h / 2.0 {
+    if dy > HALF_SCREEN_HEIGHT {
         dy -= h;
-    } else if dy < -h / 2.0 {
+    } else if dy < -HALF_SCREEN_HEIGHT {
         dy += h;
     }
     vec2(dx, dy)
 }
 
+/// Initialize SpatialGrid with `new`.
+/// Clear the internal map with `clear_grid` at the beginning of every loop.
+/// Use `register_pos` on each boid to fill the grid after clearing.
+/// Use `get_neighbors` in rules to get the indexes of a boid's neighbors.
+pub struct SpatialGrid {
+    cell_size: f32,
+    grid_rows: i32,
+    grid_cols: i32,
+    /// First Vec is row/cols
+    /// Second Vec is list at that row/col index
+    /// usize is index so we can ignore ourselves when grabbing neighbors
+    /// First Vec2 is current position, Second Vec2 is current velocity
+    cells: Vec<Vec<(usize, Vec2, Vec2)>>,
+}
+
+impl SpatialGrid {
+    pub fn new() -> Self {
+        let grid_cols = (SCREEN_WIDTH / CELL_SIZE).ceil() as i32;
+        let grid_rows = (SCREEN_HEIGHT / CELL_SIZE).ceil() as i32;
+        let total_cells = (grid_rows * grid_cols) as usize;
+        Self {
+            cell_size: CELL_SIZE,
+            grid_rows,
+            grid_cols,
+            cells: vec![Vec::new(); total_cells],
+        }
+    }
+
+    /// Clear each cell's vector at the start of each frame.
+    pub fn clear_grid(&mut self) {
+        for cell in &mut self.cells {
+            cell.clear();
+        }
+    }
+
+    /// Register the position of a boid by computing its cell index.
+    pub fn register_pos(&mut self, index: usize, boid: &Boid) {
+        let cell = self.get_cell(boid.pos);
+        // Wrap the cell coordinates toroidally.
+        let wrapped_cell = ivec2(
+            cell.x.rem_euclid(self.grid_cols),
+            cell.y.rem_euclid(self.grid_rows),
+        );
+        let flat_index = (wrapped_cell.x + wrapped_cell.y * self.grid_cols) as usize;
+        self.cells[flat_index].push((index, boid.pos, boid.vel));
+    }
+
+    /// Returns neighbors' toroidal position diff and neighbors' velocity in a tuple
+    pub fn get_neighbors(
+        &self,
+        index: usize,
+        current_pos: Vec2,
+        view_distance: f32,
+    ) -> Vec<(Vec2, Vec2)> {
+        let current_cell = self.get_cell(current_pos);
+        let radius = (view_distance / self.cell_size).ceil() as i32; // radius in cells
+        let mut neighbors = Vec::new();
+
+        for dx in -radius..=radius {
+            for dy in -radius..=radius {
+                let cell = current_cell + ivec2(dx, dy);
+                let wrapped_cell = ivec2(
+                    cell.x.rem_euclid(self.grid_cols),
+                    cell.y.rem_euclid(self.grid_rows),
+                );
+                let flat_index = (wrapped_cell.x + wrapped_cell.y * self.grid_cols) as usize;
+                for (neighbor_index, pos, vel) in self.cells[flat_index].iter() {
+                    if *neighbor_index != index {
+                        let diff = toroidal_diff(*pos, current_pos);
+                        // Rules will filter out neighbors beyond view_distance:
+                        // TODO: Test if filtering out by view_distance here helps performance
+                        if diff.length() < view_distance {
+                            neighbors.push((diff, *vel));
+                        }
+                    }
+                }
+            }
+        }
+        neighbors
+    }
+
+    /// Computes the grid cell from a position.
+    fn get_cell(&self, pos: Vec2) -> IVec2 {
+        (pos / self.cell_size).floor().as_ivec2()
+    }
+}
+
 #[macroquad::main("Boids")]
 async fn main() {
+    let pid = process::id();
+    println!("My PID is: {}", pid);
     window::set_fullscreen(true);
 
-    // Wait until the window is fullscreen.
-    //while macroquad::window::screen_height() < 700. {
-    //    clear_background(BLACK);
-    //    draw_text("Waiting for fullscreen...", 20.0, 20.0, 30.0, WHITE);
-    //    next_frame().await;
-    //}
+    // Wait until the window is fullscreen-ish.
+    while screen_height() < 700. {
+        clear_background(BLACK);
+        draw_text("Waiting for fullscreen...", 20.0, 20.0, 30.0, WHITE);
+        next_frame().await;
+    }
 
     let width = screen_width();
     let height = screen_height();
@@ -81,8 +196,15 @@ async fn main() {
         })
         .collect();
 
+    let mut spatial_grid = SpatialGrid::new();
+
     loop {
-        move_boids(&mut boids);
+        spatial_grid.clear_grid();
+        for (index, boid) in boids.iter().enumerate() {
+            spatial_grid.register_pos(index, boid);
+        }
+
+        move_boids(&mut boids, &spatial_grid);
 
         for (i, boid) in boids.iter().enumerate() {
             //if i == 0 {
@@ -113,10 +235,11 @@ async fn main() {
     }
 }
 
-fn move_boids(boids: &mut Vec<Boid>) {
-    cohesion_rule(boids);
-    alignment_rule(boids);
-    separation_rule(boids);
+fn move_boids(boids: &mut Vec<Boid>, grid: &SpatialGrid) {
+    for (index, mut boid) in boids.iter_mut().enumerate() {
+        let neighbors = grid.get_neighbors(index, boid.pos, MAXIMUM_DISTANCE);
+        apply_rules(&mut boid, &neighbors);
+    }
     for boid in boids.iter_mut() {
         let target_rotation = boid.vel.x.atan2(-boid.vel.y);
         boid.rot = target_rotation;
@@ -131,123 +254,71 @@ fn move_boids(boids: &mut Vec<Boid>) {
         boid.pos = wrap_around(&boid.pos);
     }
 }
+fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
+    // Sums for the three rules
+    let mut center = vec2(0., 0.);
+    let mut center_count = 0;
 
-/// moves the boid towards the center of all boids
-///
-/// 1. Find the center of nearby boids
-/// 2. Determine perceived center
-/// 3. Get our boid a percentage of the way there
-///
-fn cohesion_rule(boids: &mut Vec<Boid>) {
-    let num_boids = boids.len();
-    let mut adjustments = vec![vec2(0.0, 0.0); num_boids];
-    let mut super_count = 0;
+    let mut vel_sum = vec2(0., 0.);
+    let mut vel_count = 0;
 
-    for i in 0..num_boids {
-        super_count += 1;
-        let mut center = vec2(0., 0.);
-        let mut count = 0;
-        for j in 0..num_boids {
-            if i != j {
-                let diff = toroidal_diff(boids[j].pos, boids[i].pos);
-                if diff.length() < COHESION_DISTANCE_THRESHOLD {
-                    center += diff + boids[i].pos;
-                    count += 1;
-                }
-            }
+    let mut separation = vec2(0., 0.);
+
+    for (diff, vel) in neighbors.iter() {
+        let dist = diff.length();
+
+        // Cohesion
+        if dist < COHESION_DISTANCE_THRESHOLD {
+            center += *diff + current_boid.pos;
+            center_count += 1;
         }
-        if count > 0 {
-            let perceived_center = center / count as f32;
-            let cohesion_adjustment = perceived_center - boids[i].pos;
-            // Compute perpendicular (vortex) vector
-            let perpendicular = if cohesion_adjustment.length() != 0.0 {
-                vec2(-cohesion_adjustment.y, cohesion_adjustment.x).normalize()
-            } else {
-                vec2(0.0, 0.0)
-            };
-            // Combine the direct pull with a small swirl component
-            adjustments[i] += cohesion_adjustment + perpendicular * SWIRL_FACTOR as f32;
-            //if i == 0 {
-            //    println!("cohesion adjustment {:?}", adjustments[i]);
-            //}
+
+        // Alignment
+        if dist < ALIGNMENT_DISTANCE_THRESHOLD {
+            vel_sum += *vel;
+            vel_count += 1;
+        }
+
+        // Separation
+        if dist < SEPARATION_DISTANCE_THRESHOLD {
+            separation -= *diff;
         }
     }
-    // Update each boid's velocity with its computed cohesion force.
-    for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
-        boid.vel += *adjustment / COHESION_FACTOR;
-    }
-    //println!("count {:?}", super_count);
-}
 
-/// aligns the boids velocity with the boids around it
-///
-/// 1. Find the average velocity
-/// 2. Determine velocity of others
-/// 3. Align our boid a percentage of the way
-fn alignment_rule(boids: &mut Vec<Boid>) {
-    let num_boids = boids.len();
-    let mut adjustments = vec![vec2(0.0, 0.0); num_boids];
-
-    for i in 0..boids.len() {
-        let mut avg_velocity = vec2(0., 0.);
-        let mut count = 0;
-        for j in 0..boids.len() {
-            if i != j {
-                let diff = toroidal_diff(boids[i].pos, boids[j].pos);
-                if diff.length() < ALIGNMENT_DISTANCE_THRESHOLD {
-                    avg_velocity += boids[j].vel;
-                    count += 1;
-                }
-            }
-        }
-        if count > 0 {
-            let perceived_velocity = avg_velocity / count as f32 - boids[i].vel;
-            adjustments[i] += perceived_velocity;
-
-            //if i == 0 {
-            //    println!("alignment adjustment {:?}", adjustments[i]);
-            //}
-        }
-    }
-    for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
-        boid.vel += *adjustment / ALIGNMENT_FACTOR;
-    }
-}
-
-/// keep our boid away from other boids
-///
-/// 1. create adjustments vec2 for each boid
-/// 2. get the diff in distance for boids many to many
-/// 3. if diff is less than constant, adjust boid directly away?
-fn separation_rule(boids: &mut Vec<Boid>) {
-    let num_boids = boids.len();
-    let mut adjustments = vec![vec2(0.0, 0.0); num_boids];
-    let screen_vec = vec2(screen_width(), screen_height());
-
-    for i in 0..num_boids {
-        for j in 0..num_boids {
-            if i != j {
-                let real_diff = boids[j].pos - boids[i].pos;
-                let wrapped_diff = boids[j].pos - boids[i].pos - screen_vec;
-                let diff = if real_diff.length() < wrapped_diff.length() {
-                    real_diff
-                } else {
-                    wrapped_diff
-                };
-                if diff.length() < SEPARATION_DISTANCE_THRESHOLD {
-                    adjustments[i] -= diff;
-                }
-            }
-        }
-        //if i == 0 {
-        //    println!("separation adjustment {:?}", adjustments[i]);
-        //}
+    // Cohesion
+    // Aligns the boids velocity with the boids around it.
+    //
+    // 1. Find the average velocity.
+    // 2. Determine velocity of others.
+    // 3. Align our boid a percentage of the way.
+    if center_count > 0 {
+        let perceived_center = center / (center_count as f32) - current_boid.pos;
+        let perpendicular = if perceived_center.length() != 0.0 {
+            vec2(-perceived_center.y, perceived_center.x).normalize()
+        } else {
+            vec2(0.0, 0.0)
+        };
+        current_boid.vel += (perceived_center + perpendicular * SWIRL_FACTOR) / COHESION_FACTOR;
     }
 
-    // Update each boid's velocity with its computed separation force.
-    for (boid, adjustment) in boids.iter_mut().zip(adjustments.iter()) {
-        boid.vel += *adjustment / SEPARATION_FACTOR;
+    // Alignment
+    // Keep our boid away from other boids.
+    //
+    // 1. Create adjustments vec2 for each boid.
+    // 2. Get the diff in distance for boids many to many.
+    // 3. If diff is less than constant, adjust boid directly away?
+    if vel_count > 0 {
+        let perceived_velocity = vel_sum / (vel_count as f32);
+        current_boid.vel += perceived_velocity / ALIGNMENT_FACTOR;
     }
+
+    // Separation
+    // Keep our boid away from other boids.
+    //
+    // 1. Create adjustments vec2 for each boid.
+    // 2. Get the diff in distance for boids many to many.
+    // 3. If diff is less than constant, adjust boid directly away?
+    current_boid.vel += separation / SEPARATION_FACTOR;
 }
 
 //fn calc_color(boid: &Boid) -> Color {
@@ -277,17 +348,17 @@ fn calc_color(boid: &Boid) -> Color {
 
 fn wrap_around(v: &Vec2) -> Vec2 {
     let mut vr = vec2(v.x, v.y);
-    if vr.x > screen_width() {
+    if vr.x > SCREEN_WIDTH {
         vr.x = 0.;
     }
     if vr.x < 0. {
-        vr.x = screen_width()
+        vr.x = SCREEN_WIDTH;
     }
-    if vr.y > screen_height() {
+    if vr.y > SCREEN_HEIGHT {
         vr.y = 0.;
     }
     if vr.y < 0. {
-        vr.y = screen_height()
+        vr.y = SCREEN_HEIGHT;
     }
     vr
 }
