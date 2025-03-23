@@ -4,20 +4,20 @@ use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
-const BOID_COUNT: u32 = 5000;
-const MAX_SPEED: f32 = 2.;
+const BOID_COUNT: u32 = 10000;
+const MAX_SPEED: f32 = 4.;
 
 const SEPARATION_FACTOR: f32 = 20.;
 const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
 
-const COHESION_FACTOR: f32 = 100.;
+const COHESION_FACTOR: f32 = 200.;
 const COHESION_DISTANCE_THRESHOLD: f32 = 50.;
-const SWIRL_FACTOR: f32 = 0.;
+const SWIRL_FACTOR: f32 = 30.;
 
-const ALIGNMENT_FACTOR: f32 = 15.;
+const ALIGNMENT_FACTOR: f32 = 25.;
 const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 50.;
 
-const MAXIMUM_DISTANCE: f32 = 50.;
+const MAXIMUM_DISTANCE: f32 = 50.; // UPDATE TO MATCH MAX OF RULE_FACTORS! (this is so bad...)
 
 const DRIVE_FACTOR: f32 = 0.7;
 
@@ -27,10 +27,10 @@ const DEBUG_ENABLED: bool = true;
 
 // Hard coded because Lazy static kills performance
 // Move simulation to a struct and make these properties for dynamism
-const SCREEN_HEIGHT: f32 = 1280.;
+const SCREEN_HEIGHT: f32 = 1080.;
 const SCREEN_WIDTH: f32 = 1920.;
 
-const HALF_SCREEN_HEIGHT: f32 = 1280. / 2.0;
+const HALF_SCREEN_HEIGHT: f32 = 1080. / 2.0;
 const HALF_SCREEN_WIDTH: f32 = 1920. / 2.0;
 
 #[derive(Clone, Debug)]
@@ -177,15 +177,27 @@ async fn main() {
     let width = screen_width();
     let height = screen_height();
 
-    let row_size = 20.;
-    let col_size = 10.;
-    let grid_cols = (width / col_size) as u32;
-    let grid_rows = (height / row_size) as u32;
-    let positions: Vec<Vec2> = (0..grid_cols)
-        .flat_map(|i| (0..grid_rows).map(move |j| vec2(i as f32 * row_size, j as f32 * col_size)))
-        .collect();
+    // Calculate grid dimensions for an approximately square grid.
+    let grid_cols = (BOID_COUNT as f32).sqrt().ceil() as u32;
+    let grid_rows = grid_cols; // Using a square grid
 
-    //println!("{:?}", positions);
+    // Calculate the spacing between boids.
+    let col_size = width / grid_cols as f32;
+    let row_size = height / grid_rows as f32;
+
+    // Create positions for each grid cell.
+    let positions: Vec<Vec2> = (0..grid_rows)
+        .flat_map(|j| {
+            (0..grid_cols).map(move |i| {
+                // Optionally, add col_size/2 and row_size/2 to center the boid in its cell.
+                vec2(
+                    i as f32 * col_size + col_size / 2.0,
+                    j as f32 * row_size + row_size / 2.0,
+                )
+            })
+        })
+        .take(BOID_COUNT as usize) // Only take as many positions as needed.
+        .collect();
 
     let mut boids: Vec<Boid> = (0..BOID_COUNT)
         .map(|index| Boid {
@@ -266,6 +278,8 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
 
     let mut separation = vec2(0., 0.);
 
+    let mut net_force = vec2(0., 0.);
+
     for (diff, vel) in neighbors.iter() {
         let dist = diff.length();
 
@@ -300,18 +314,14 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
         } else {
             vec2(0.0, 0.0)
         };
-        current_boid.vel += (perceived_center + perpendicular * SWIRL_FACTOR) / COHESION_FACTOR;
+        net_force += (perceived_center + perpendicular * SWIRL_FACTOR) / COHESION_FACTOR;
     }
 
     // Alignment
-    // Keep our boid away from other boids.
-    //
-    // 1. Create adjustments vec2 for each boid.
-    // 2. Get the diff in distance for boids many to many.
-    // 3. If diff is less than constant, adjust boid directly away?
+    // Keep our boid going in the directions of its friends.
     if vel_count > 0 {
         let perceived_velocity = vel_sum / (vel_count as f32);
-        current_boid.vel += perceived_velocity / ALIGNMENT_FACTOR;
+        net_force += (perceived_velocity - current_boid.vel) / ALIGNMENT_FACTOR;
     }
 
     // Separation
@@ -320,7 +330,7 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
     // 1. Create adjustments vec2 for each boid.
     // 2. Get the diff in distance for boids many to many.
     // 3. If diff is less than constant, adjust boid directly away?
-    current_boid.vel += separation / SEPARATION_FACTOR;
+    current_boid.vel += separation / SEPARATION_FACTOR + net_force;
 }
 
 //fn calc_color(boid: &Boid) -> Color {
