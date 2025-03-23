@@ -4,26 +4,29 @@ use macroquad::{prelude::*, window};
 
 const BOID_HEIGHT: f32 = 13.;
 const BOID_BASE: f32 = 8.;
-const BOID_COUNT: u32 = 10000;
-const MAX_SPEED: f32 = 4.;
+const BOID_COUNT: u32 = 15000;
+const MAX_SPEED: f32 = 0.5;
 
-const SEPARATION_FACTOR: f32 = 20.;
-const SEPARATION_DISTANCE_THRESHOLD: f32 = 10.;
+const SEPARATION_FACTOR: f32 = 300.;
+const SEPARATION_DISTANCE_THRESHOLD: f32 = 12.;
 
-const COHESION_FACTOR: f32 = 200.;
-const COHESION_DISTANCE_THRESHOLD: f32 = 50.;
-const SWIRL_FACTOR: f32 = 30.;
+const CLOSE_SEPARATION_FACTOR: f32 = 1.;
+const CLOSE_SEPARATION_DISTANCE_THRESHOLD: f32 = 2.;
 
-const ALIGNMENT_FACTOR: f32 = 25.;
-const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 50.;
+const COHESION_FACTOR: f32 = 400.;
+const COHESION_DISTANCE_THRESHOLD: f32 = 20.;
+// const SWIRL_FACTOR: f32 = 0.0;
 
-const MAXIMUM_DISTANCE: f32 = 50.; // UPDATE TO MATCH MAX OF RULE_FACTORS! (this is so bad...)
+const ALIGNMENT_FACTOR: f32 = 40.; // lower this gently when you get back, This is really good below 1 as a natural drive
+const ALIGNMENT_DISTANCE_THRESHOLD: f32 = 14.;
 
-const DRIVE_FACTOR: f32 = 0.7;
+const MAXIMUM_DISTANCE: f32 = 20.; // UPDATE TO MATCH MAX OF RULE_FACTORS! (this is so bad...)
 
-const CELL_SIZE: f32 = 50.;
+const DRIVE_FACTOR: f32 = 0.04;
 
-const DEBUG_ENABLED: bool = true;
+const CELL_SIZE: f32 = 30.;
+
+const DEBUG_ENABLED: bool = false;
 
 // Hard coded because Lazy static kills performance
 // Move simulation to a struct and make these properties for dynamism
@@ -142,9 +145,9 @@ impl SpatialGrid {
                 let flat_index = (wrapped_cell.x + wrapped_cell.y * self.grid_cols) as usize;
                 for (neighbor_index, pos, vel) in self.cells[flat_index].iter() {
                     if *neighbor_index != index {
-                        let diff = toroidal_diff(*pos, current_pos);
-                        // Rules will filter out neighbors beyond view_distance:
-                        // TODO: Test if filtering out by view_distance here helps performance
+                        let diff = toroidal_diff(*pos, current_pos); // was toroidal diff
+                                                                     // Rules will filter out neighbors beyond view_distance:
+                                                                     // TODO: Test if filtering out by view_distance here helps performance
                         if diff.length() < view_distance {
                             neighbors.push((diff, *vel));
                         }
@@ -204,8 +207,8 @@ async fn main() {
             pos: positions[index as usize],
             rot: 0.,
             vel: vec2(
-                rand::gen_range(-MAX_SPEED, MAX_SPEED),
-                rand::gen_range(-MAX_SPEED, MAX_SPEED),
+                rand::gen_range(-MAX_SPEED, MAX_SPEED) / 2.,
+                rand::gen_range(-MAX_SPEED, MAX_SPEED) / 2.,
             ),
         })
         .collect();
@@ -277,6 +280,7 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
     let mut vel_count = 0;
 
     let mut separation = vec2(0., 0.);
+    let mut close_separation = vec2(0., 0.);
 
     let mut net_force = vec2(0., 0.);
 
@@ -299,6 +303,9 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
         if dist < SEPARATION_DISTANCE_THRESHOLD {
             separation -= *diff;
         }
+        if dist < CLOSE_SEPARATION_DISTANCE_THRESHOLD {
+            close_separation -= *diff;
+        }
     }
 
     // Cohesion
@@ -309,12 +316,13 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
     // 3. Align our boid a percentage of the way.
     if center_count > 0 {
         let perceived_center = center / (center_count as f32) - current_boid.pos;
-        let perpendicular = if perceived_center.length() != 0.0 {
-            vec2(-perceived_center.y, perceived_center.x).normalize()
-        } else {
-            vec2(0.0, 0.0)
-        };
-        net_force += (perceived_center + perpendicular * SWIRL_FACTOR) / COHESION_FACTOR;
+        // let perpendicular = if perceived_center.length() != 0.0 {
+        //     vec2(-perceived_center.y, -perceived_center.x).normalize()
+        // } else {
+        //     vec2(0.0, 0.0)
+        // };
+        // net_force += (perceived_center + perpendicular * SWIRL_FACTOR) / COHESION_FACTOR;
+        net_force += perceived_center / COHESION_FACTOR;
     }
 
     // Alignment
@@ -330,7 +338,10 @@ fn apply_rules(current_boid: &mut Boid, neighbors: &[(Vec2, Vec2)]) {
     // 1. Create adjustments vec2 for each boid.
     // 2. Get the diff in distance for boids many to many.
     // 3. If diff is less than constant, adjust boid directly away?
-    current_boid.vel += separation / SEPARATION_FACTOR + net_force;
+    net_force += separation / SEPARATION_FACTOR;
+    net_force += close_separation / CLOSE_SEPARATION_FACTOR;
+
+    current_boid.vel += net_force;
 }
 
 //fn calc_color(boid: &Boid) -> Color {
