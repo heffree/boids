@@ -1,4 +1,6 @@
-WIP Boids - Flocking Algorithm
+https://www.youtube.com/watch?v=TrSr_A8zB2E
+
+Boids - Flocking Algorithm
 
 WINDOW SIZE MATTERS (for now)
 
